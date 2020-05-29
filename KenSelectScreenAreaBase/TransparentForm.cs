@@ -16,10 +16,11 @@ namespace KenSmithConsulting.KenSelectScreenAreaBase
         public bool SelectionCancelled { get; set; }
         // The logical screen is the combination of all screens considered to be one contigous screen.
         // Note that the upper left corner of the logical screen may not be (0,0)!
-        public Rectangle LogicalScreenBounds { get; set; }
+        //public Rectangle VirtualScreen { get; set; }
         const float DEFAULT_OPACITY = .75f; //.60f;
         const int CLOSE_AMOUNT_PIXELS = 10;
         const int RED_BORDER_WIDTH_PIXELS = 12;
+
         readonly Pen RedBorderPen = new Pen(Color.Red, RED_BORDER_WIDTH_PIXELS);
         readonly Font TextFont = new Font(FontFamily.GenericSansSerif, 8);
 
@@ -42,7 +43,6 @@ namespace KenSmithConsulting.KenSelectScreenAreaBase
         private void TransparentForm_Load(object sender, EventArgs e)
         {
             KeyPreview = true;
-            LogicalScreenBounds = GetLogicalScreenBounds();
             SimulateInitialLoad();
         }
         private void SimulateInitialLoad()
@@ -77,26 +77,6 @@ namespace KenSmithConsulting.KenSelectScreenAreaBase
                     graphics.DrawString(info, TextFont, Brushes.Black, RED_BORDER_WIDTH_PIXELS + 2, RED_BORDER_WIDTH_PIXELS + 2);
                 }
             }
-        }
-        private Rectangle GetLogicalScreenBounds()
-        {
-            Rectangle logicalBounds = new Rectangle();
-            int minHorizontalPosition = 0;
-            int maxHorizontalPosition = 0;
-            int minVerticalPosition = 0;
-            int maxVerticalPosition = 0;
-            foreach (Screen screen in Screen.AllScreens)
-            {
-                minHorizontalPosition = Math.Min(minHorizontalPosition, screen.Bounds.X);
-                maxHorizontalPosition = Math.Max(maxHorizontalPosition, screen.Bounds.X + screen.Bounds.Width);
-                minVerticalPosition = Math.Min(minVerticalPosition, screen.Bounds.Y);
-                maxVerticalPosition = Math.Max(maxVerticalPosition, screen.Bounds.Y + screen.Bounds.Height);
-            }
-            logicalBounds.X = minHorizontalPosition;
-            logicalBounds.Y = minVerticalPosition;
-            logicalBounds.Width = maxHorizontalPosition - minHorizontalPosition;
-            logicalBounds.Height = maxVerticalPosition - minVerticalPosition;
-            return logicalBounds;
         }
         private void ButtonBegin_Click(object sender, EventArgs e)
         {
@@ -136,7 +116,7 @@ namespace KenSmithConsulting.KenSelectScreenAreaBase
         private void TransparentForm_MouseUp(object sender, MouseEventArgs e)
         {
             Cursor = Cursors.Arrow;
-            // If the MouseUp event occurs, the user is not dragging.
+            // If the MouseUp event occurs, the user is not dragging or resizing.
             isDrag = false;
             isResizeNW = false;
             isResizeSE = false;
@@ -149,11 +129,11 @@ namespace KenSmithConsulting.KenSelectScreenAreaBase
         }
         private void TransparentForm_MouseMove(object sender, MouseEventArgs e)
         {
+            Point endPoint = ((Control)sender).PointToScreen(new Point(e.X, e.Y));
             // If the mouse is being dragged, move the window
             if (isDrag)
             {
                 // Calculate the endpoint 
-                Point endPoint = ((Control)sender).PointToScreen(new Point(e.X, e.Y));
                 int deltaX = endPoint.X - startPoint.X;
                 int deltaY = endPoint.Y - startPoint.Y;
                 Location = new Point(Location.X + deltaX, Location.Y + deltaY);
@@ -164,21 +144,23 @@ namespace KenSmithConsulting.KenSelectScreenAreaBase
                     Location.Y + RED_BORDER_WIDTH_PIXELS,
                     Size.Width - (2 * RED_BORDER_WIDTH_PIXELS),
                     Size.Height - (2 * RED_BORDER_WIDTH_PIXELS));
-                if (areaInsideRedFrame.X < LogicalScreenBounds.X)
+                // v1.1.0 2020-05-29 Refactored code to use SystemInformation.VirtualScreen instead of method GetLogicalScreenBounds().
+                Rectangle virtualScreen = SystemInformation.VirtualScreen;
+                if (areaInsideRedFrame.X < SystemInformation.VirtualScreen.X)
                 {
-                    Location = new Point(LogicalScreenBounds.X - RED_BORDER_WIDTH_PIXELS, Location.Y);
+                    Location = new Point(virtualScreen.X - RED_BORDER_WIDTH_PIXELS, Location.Y);
                 }
-                if (areaInsideRedFrame.X + areaInsideRedFrame.Width > LogicalScreenBounds.X + LogicalScreenBounds.Width)
+                if (areaInsideRedFrame.X + areaInsideRedFrame.Width > virtualScreen.X + virtualScreen.Width)
                 {
-                    Location = new Point(LogicalScreenBounds.X + LogicalScreenBounds.Width + RED_BORDER_WIDTH_PIXELS - Size.Width, Location.Y);
+                    Location = new Point(virtualScreen.X + virtualScreen.Width + RED_BORDER_WIDTH_PIXELS - Size.Width, Location.Y);
                 }
-                if (areaInsideRedFrame.Y < LogicalScreenBounds.Y)
+                if (areaInsideRedFrame.Y < virtualScreen.Y)
                 {
-                    Location = new Point(Location.X, LogicalScreenBounds.Y - RED_BORDER_WIDTH_PIXELS);
+                    Location = new Point(Location.X, virtualScreen.Y - RED_BORDER_WIDTH_PIXELS);
                 }
-                if (areaInsideRedFrame.Y + areaInsideRedFrame.Height > LogicalScreenBounds.Y + LogicalScreenBounds.Height)
+                if (areaInsideRedFrame.Y + areaInsideRedFrame.Height > virtualScreen.Y + virtualScreen.Height)
                 {
-                    Location = new Point(Location.X, LogicalScreenBounds.Y + LogicalScreenBounds.Height + RED_BORDER_WIDTH_PIXELS - Size.Height);
+                    Location = new Point(Location.X, virtualScreen.Y + virtualScreen.Height + RED_BORDER_WIDTH_PIXELS - Size.Height);
                 }
                 startPoint = new Point(endPoint.X, endPoint.Y);
                 // only necessary if drawing text because moving a window does not generally call Paint
@@ -187,54 +169,9 @@ namespace KenSmithConsulting.KenSelectScreenAreaBase
                     Invalidate();
                 }
             }
-            if (isResizeNW)
-            {
-                // Calculate the endpoint 
-                Point endPoint = ((Control)sender).PointToScreen(new Point(e.X, e.Y));
-                ResizeNW(endPoint);
-            }
-            if (isResizeSE)
-            {
-                // Calculate the endpoint 
-                Point endPoint = ((Control)sender).PointToScreen(new Point(e.X, e.Y));
-                ResizeSE(endPoint);
-            }
-            if (isResizeNE)
-            {
-                // Calculate the endpoint 
-                Point endPoint = ((Control)sender).PointToScreen(new Point(e.X, e.Y));
-                ResizeNE(endPoint);
-            }
-            if (isResizeSW)
-            {
-                // Calculate the endpoint 
-                Point endPoint = ((Control)sender).PointToScreen(new Point(e.X, e.Y));
-                ResizeSW(endPoint);
-            }
-            if (isResizeW)
-            {
-                // Calculate the endpoint 
-                Point endPoint = ((Control)sender).PointToScreen(new Point(e.X, e.Y));
-                ResizeW(endPoint);
-            }
-            if (isResizeN)
-            {
-                // Calculate the endpoint 
-                Point endPoint = ((Control)sender).PointToScreen(new Point(e.X, e.Y));
-                ResizeN(endPoint);
-            }
-            if (isResizeE)
-            {
-                // Calculate the endpoint 
-                Point endPoint = ((Control)sender).PointToScreen(new Point(e.X, e.Y));
-                ResizeE(endPoint);
-            }
-            if (isResizeS)
-            {
-                // Calculate the endpoint 
-                Point endPoint = ((Control)sender).PointToScreen(new Point(e.X, e.Y));
-                ResizeS(endPoint);
-            }
+            // v1.1.0 2020-05-29 Refactored code for window resizing actions
+            // Tricky! Method ResizeRedFrame will examine flags isResizeNW, isResizeSE etc, (Those flags will be valid in that method!)
+            ResizeRedFrame(endPoint);
             if (e.Button == MouseButtons.None) 
             {
                 SetCursorImage();
@@ -278,75 +215,68 @@ namespace KenSmithConsulting.KenSelectScreenAreaBase
                 Cursor = Cursors.SizeAll;
             }
         }
-        private void ResizeNW(Point endPoint)
+        // v1.1.0 2020-05-29 Refactored code for window resizing actions
+        // Tricky! Method ResizeRedFrame will examine flags isResizeNW, isResizeSE etc, (Those flags will be valid in that method!)
+        private void ResizeRedFrame(Point endPoint)
         {
             int deltaX = endPoint.X - startPoint.X;
             int deltaY = endPoint.Y - startPoint.Y;
-            Width = Width - deltaX;
-            Height = Height - deltaY;
-            Location = new Point(Location.X + deltaX, Location.Y + deltaY);
+            // v1.1.0 2020-05-29 Fix bug: Do not allow resizing to width or height less than 10.
+            int origWidth = Width;
+            int origHeight = Height;
+            Point origLocation = Location;
+            if (isResizeNW)
+            {
+                Width = Width - deltaX;
+                Height = Height - deltaY;
+                Location = new Point(Location.X + deltaX, Location.Y + deltaY);
+            }
+            if (isResizeN)
+            {
+                Height = Height - deltaY;
+                Location = new Point(Location.X, Location.Y + deltaY);
+            }
+            if (isResizeNE)
+            {
+                Width = Width + deltaX;
+                Height = Height - deltaY;
+                Location = new Point(Location.X, Location.Y + deltaY);
+            }
+            if (isResizeE)
+            {
+                Width = Width + deltaX;
+            }
+            if (isResizeSE)
+            {
+                Width = Width + deltaX;
+                Height = Height + deltaY;
+            }
+            if (isResizeS)
+            {
+                Height = Height + deltaY;
+            }
+            if (isResizeSW)
+            {
+                Width = Width - deltaX;
+                Height = Height + deltaY;
+                Location = new Point(Location.X + deltaX, Location.Y);
+            }
+            if (isResizeW)
+            {
+                Width = Width - deltaX;
+                Location = new Point(Location.X + deltaX, Location.Y);
+            }
+            // v1.1.0 2020-05-29 Fix bug: Do not allow resizing to width or height less than 10.
+            if ((Width < 10 + (2 * RED_BORDER_WIDTH_PIXELS)) || (Height < 10 + (2 * RED_BORDER_WIDTH_PIXELS)))
+            {
+                Width = origWidth;
+                Height = origHeight;
+                Location = origLocation;
+            }
             startPoint = new Point(endPoint.X, endPoint.Y);
             Refresh();
         }
-        private void ResizeSE(Point endPoint)
-        {
-            int deltaX = endPoint.X - startPoint.X;
-            int deltaY = endPoint.Y - startPoint.Y;
-            Width = Width + deltaX;
-            Height = Height + deltaY;
-            startPoint = new Point(endPoint.X, endPoint.Y);
-            Refresh();
-        }
-        private void ResizeNE(Point endPoint)
-        {
-            int deltaX = endPoint.X - startPoint.X;
-            int deltaY = endPoint.Y - startPoint.Y;
-            Width = Width + deltaX;
-            Height = Height - deltaY;
-            Location = new Point(Location.X, Location.Y + deltaY);
-            startPoint = new Point(endPoint.X, endPoint.Y);
-            Refresh();
-        }
-        private void ResizeSW(Point endPoint)
-        {
-            int deltaX = endPoint.X - startPoint.X;
-            int deltaY = endPoint.Y - startPoint.Y;
-            Width = Width - deltaX;
-            Height = Height + deltaY;
-            Location = new Point(Location.X + deltaX, Location.Y);
-            startPoint = new Point(endPoint.X, endPoint.Y);
-            Refresh();
-        }
-        private void ResizeN(Point endPoint)
-        {
-            int deltaY = endPoint.Y - startPoint.Y;
-            Height = Height - deltaY;
-            Location = new Point(Location.X, Location.Y + deltaY);
-            startPoint = new Point(endPoint.X, endPoint.Y);
-            Refresh();
-        }
-        private void ResizeW(Point endPoint)
-        {
-            int deltaX = endPoint.X - startPoint.X;
-            Width = Width - deltaX;
-            Location = new Point(Location.X + deltaX, Location.Y);
-            startPoint = new Point(endPoint.X, endPoint.Y);
-            Refresh();
-        }
-        private void ResizeE(Point endPoint)
-        {
-            int deltaX = endPoint.X - startPoint.X;
-            Width = Width + deltaX;
-            startPoint = new Point(endPoint.X, endPoint.Y);
-            Refresh();
-        }
-        private void ResizeS(Point endPoint)
-        {
-            int deltaY = endPoint.Y - startPoint.Y;
-            Height = Height + deltaY;
-            startPoint = new Point(endPoint.X, endPoint.Y);
-            Refresh();
-        }
+        
         private bool CursorIsInsideTransparentFormBounds()
         {
             Rectangle rect = new Rectangle(Location.X, Location.Y, Size.Width, Size.Height);
