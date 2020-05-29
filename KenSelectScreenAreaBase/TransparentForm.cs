@@ -14,9 +14,11 @@ namespace KenSmithConsulting.KenSelectScreenAreaBase
     {
         public Rectangle SelectedArea { get; set; }
         public bool SelectionCancelled { get; set; }
-        // The logical screen is the combination of all screens considered to be one contigous screen.
-        // Note that the upper left corner of the logical screen may not be (0,0)!
-        //public Rectangle VirtualScreen { get; set; }
+        // v1.1.0 2020-05-29 Fix bug: The window must be the original size if the Escape key is used to exit from resizing and moving the red frame.
+        private int origWidth;
+        private int origHeight;
+        private Point origLocation;
+
         const float DEFAULT_OPACITY = .75f; //.60f;
         const int CLOSE_AMOUNT_PIXELS = 10;
         const int RED_BORDER_WIDTH_PIXELS = 12;
@@ -48,6 +50,10 @@ namespace KenSmithConsulting.KenSelectScreenAreaBase
         private void SimulateInitialLoad()
         {
             SelectionCancelled = true;
+            // v1.1.0 2020-05-29 Fix bug: The window must be the original size if the Escape key is used to exit from resizing and moving the red frame.
+            origWidth = Width;
+            origHeight = Height;
+            origLocation = Location;
             // 5/28/2020 Circumvent bug in .NET! If you set this to Sizable, then it is ok until you
             // move the window to a 2nd display where the x-xoord starts in negative numbers.  The
             // sizing cursor on the bottom edge will always be Cursors.SizeNWSE instead of SizeNS.
@@ -145,6 +151,8 @@ namespace KenSmithConsulting.KenSelectScreenAreaBase
                     Size.Width - (2 * RED_BORDER_WIDTH_PIXELS),
                     Size.Height - (2 * RED_BORDER_WIDTH_PIXELS));
                 // v1.1.0 2020-05-29 Refactored code to use SystemInformation.VirtualScreen instead of method GetLogicalScreenBounds().
+                // The virtual screen is the combination of all screens considered to be one contiguous screen.
+                // Note that the upper left corner of the virtual screen may not be (0,0)!
                 Rectangle virtualScreen = SystemInformation.VirtualScreen;
                 if (areaInsideRedFrame.X < SystemInformation.VirtualScreen.X)
                 {
@@ -371,6 +379,10 @@ namespace KenSmithConsulting.KenSelectScreenAreaBase
             // Very tricky! You have to switch the form property "KeyPreview" to true or your events will not be fired
             if (e.KeyCode == Keys.Escape)
             {
+                // v1.1.0 2020-05-29 Fix bug: The window must be the original size if the Escape key is used to exit from resizing and moving the red frame.
+                Width = origWidth;
+                Height = origHeight;
+                Location = origLocation;
                 SimulateInitialLoad();
             }
         }
